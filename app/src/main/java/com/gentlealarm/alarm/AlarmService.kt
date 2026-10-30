@@ -19,7 +19,11 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
+import com.gentlealarm.data.AlarmRepository
 import com.gentlealarm.ui.AlarmActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AlarmService : Service() {
 
@@ -33,6 +37,7 @@ class AlarmService : Service() {
         stopped = false
 
         startForegroundCompat(alarm)
+        rescheduleAfterFire(alarm)
         startGentleWakeup(alarm)
         showAlarmScreenIfAllowed(alarm)
 
@@ -47,12 +52,30 @@ class AlarmService : Service() {
         val notification = buildNotification(alarm)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
-                alarm.id,
+                alarm.id.toInt(),
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
         } else {
-            startForeground(alarm.id, notification)
+            startForeground(alarm.id.toInt(), notification)
+        }
+    }
+
+    /**
+     * 响过之后立刻决定后续：
+     * - 「仅一次」→ 置为关闭，否则列表里会一直留一条不会再响的记录；
+     * - 重复规则 → 立刻排下一次，这样即使随后进程被杀、用户一直不回来，明天也照响。
+     */
+    private fun rescheduleAfterFire(alarm: Alarm) {
+        val appContext = applicationContext
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                if (alarm.repeatRule == RepeatRule.ONCE) {
+                    AlarmRepository.get(appContext).setEnabled(alarm, false)
+                } else {
+                    AlarmScheduler(appContext).scheduleNext(alarm)
+                }
+            }
         }
     }
 
@@ -152,7 +175,7 @@ class AlarmService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val fullScreenIntent = PendingIntent.getActivity(
                 this,
-                alarm.id,
+                alarm.id.toInt(),
                 alarmScreenIntent(alarm),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )

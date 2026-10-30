@@ -13,6 +13,8 @@
     <!-- 读取系统日历，把日程提前 30 分钟变成闹钟 -->
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <!-- 申请电池优化豁免：Doze 下也能准时响。注意这并不等于「永不被杀」 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <application
         android:allowBackup="true"
@@ -38,6 +40,17 @@
 
         <receiver android:name=".alarm.AlarmReceiver"
             android:exported="false"/>
+
+        <!-- 重启 / 应用更新 / 改时间 / 改时区后，从 Room 重排所有闹钟 -->
+        <receiver android:name=".alarm.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
